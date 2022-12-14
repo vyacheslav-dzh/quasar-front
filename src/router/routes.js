@@ -10,7 +10,8 @@ const routes = [
         components:
           {
             map: () => import('pages/IndexPage.vue'),
-            rightSideBar: () => import('../views/RightSideBar.vue')
+            rightSideBar: () => import('../views/RightSideBar.vue'),
+            leftSideBar: () => import('../views/LeftSideBar.vue')
           }
       }
     ]

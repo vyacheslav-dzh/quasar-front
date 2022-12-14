@@ -29,13 +29,21 @@
     </q-header>
 
     <q-drawer v-model="leftDrawerOpen" side="left" elevated>
-      <router-view name="leftSideBar"/>
+      <router-view
+        name="leftSideBar"
+        v-if="(this.clickedMarker)"
+        :marker="this.clickedMarker"
+        @editMarkerEvent="editMarkerEvent"
+        @deleteMarkerEvent="deleteMarkerEvent"
+      />
+      <h3 v-else>Выберите маркер</h3>
     </q-drawer>
 
     <q-drawer v-model="rightDrawerOpen" side="right" elevated>
       <router-view
         v-if="this.pages.length > 0 && this.activeProject"
         @changePage="changeCurPage"
+        @layersChange="this.mapUpdate = true"
         name="rightSideBar"
         :curPage="this.curPage"
         :pages="this.pages.filter(page => page.project_id === this.activeProject.id)"
@@ -43,10 +51,16 @@
     </q-drawer>
 
     <q-page-container>
-      <router-view :project="curPage" name="map" v-if="chosenProject"/>
+      <router-view
+        :project="curPage"
+        :curPage="this.curPage"
+        @mapUpdate="this.mapUpdate"
+        @markerClicked="this.markerClicked"
+        name="map"
+        v-if="chosenProject"
+      />
       <h2 v-else>Выберите проект</h2>
     </q-page-container>
-
   </q-layout>
 </template>
 
@@ -61,13 +75,16 @@ export default {
       activeProject: null,
       projects: [],
       chosenProject: ref(null),
+      mapUpdate: ref(false),
       pages: [],
       curPage: {
+        id: '',
         projectName: '',
         pageName: '',
         path: '',
         maxZoom: 0
-      }
+      },
+      clickedMarker: null
     }
   },
   setup () {
@@ -92,12 +109,11 @@ export default {
       this.changeProjectPage(this.chosenProject)
     }
   },
-  updated () {
-  },
   methods: {
     changeCurPage (pageId) {
       const page = this.pages.find(page => page.id === pageId)
       this.curPage = {
+        id: page.id,
         projectName: this.projects.find(project => project.id === page.project_id).name,
         pageName: page.name,
         path: page.path,
@@ -125,13 +141,6 @@ export default {
       }
       pageList.forEach(pageListItem => pageListItem.forEach(page => this.pages.push(page)))
     },
-    getProjectId () {
-      const id = this.projects.find((element) => element.name === this.activeProject.name).id
-      if (!id) {
-        return this.projects
-      }
-      return id
-    },
     changeProjectPage (id) {
       this.activeProject = this.projects.find(project => project.id === id)
       const pageId = this.pages.find(page => page.project_id === this.activeProject.id).id
@@ -140,13 +149,39 @@ export default {
         this.toggleRightDrawer()
       }
     },
-    goToProject (projectId) {
-      const page = this.pages.find(page => page.project_id === projectId)
-      this.curPage = {
-        projectName: this.projects.find(project => project.id === projectId).name,
-        pageName: page.name,
-        path: page.path,
-        maxZoom: page.max_zoom
+    mapUpdated () {
+      this.mapUpdate = !this.mapUpdate
+    },
+    markerClicked (marker) {
+      console.log(marker)
+      if (marker) {
+        this.clickedMarker = marker
+      }
+      if (!this.leftDrawerOpen) {
+        this.toggleLeftDrawer()
+      }
+    },
+    async editMarkerEvent (newMarker) {
+      try {
+        const marker = {
+          markerID: newMarker.oldMarker.id,
+          markerHeader: newMarker.newHeader,
+          markerText: newMarker.newDesc
+        }
+        await axios.post('http://localhost:5000/update_marker', marker)
+        this.mapUpdated()
+        this.clickedMarker = null
+      } catch (e) {
+        alert(e)
+      }
+    },
+    async deleteMarkerEvent (markerId) {
+      try {
+        await axios.get(`http://localhost:5000/delete_marker/${markerId}`)
+        this.mapUpdated()
+        this.clickedMarker = null
+      } catch (e) {
+        alert(e)
       }
     }
   }

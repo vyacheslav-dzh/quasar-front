@@ -36,16 +36,41 @@
     <q-separator class="q-mb-md"/>
 
     <q-item>
-      <q-btn class="col">Редактировать</q-btn>
+      <q-btn class="col" @click="prompt = true">Добавить слой</q-btn>
+      <q-dialog v-model="this.prompt" persistent>
+        <q-card style="min-width: 350px">
+          <q-card-section>
+            <div class="text-h6">Название слоя</div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none">
+            <q-input dense v-model="layerName" autofocus @keyup.enter="this.prompt = false" />
+          </q-card-section>
+
+          <q-card-actions align="right" class="text-primary">
+            <q-btn text-color="dark" flat label="Отмена" v-close-popup />
+            <q-btn text-color="dark" label="Добавить слой" @click="createLayer" v-close-popup />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
     </q-item>
 
   </q-list>
 </template>
 
 <script>
+import axios from 'axios'
+import { ref } from 'vue'
+
 export default {
   name: 'RightSideBar',
-  emits: ['changePage'],
+  emits: ['changePage', 'layersChange'],
+  setup () {
+    return {
+      layerName: ref(''),
+      prompt: ref(false)
+    }
+  },
   data () {
     return {
       activePage: '',
@@ -63,6 +88,23 @@ export default {
   },
   updated () {
     this.activePage = this.curPage.pageName
+  },
+  methods: {
+    async createLayer () {
+      this.$q.loadingBar.start()
+      try {
+        await axios.post('http://localhost:5000/add_layer',
+          {
+            pageId: this.curPage.id,
+            layerName: this.layerName
+          })
+        this.layerName = ''
+        this.$emit('layersChange')
+      } catch (e) {
+        alert(e)
+      }
+      this.$q.loadingBar.stop()
+    }
   }
 }
 </script>
