@@ -46,6 +46,8 @@
         @layersChange="this.mapUpdate = true"
         @deleteProjectEvent="deleteProjectEvent"
         @editProjectEvent="editProjectEvent"
+        @deletePageEvent="deletePageEvent"
+        @editPageEvent="editPageEvent"
         name="rightSideBar"
         :curPage="this.curPage"
         :pages="this.pages.filter(page => page.project_id === this.activeProject.id)"
@@ -189,7 +191,8 @@ export default {
     async deleteProjectEvent () {
       try {
         await axios.get(`http://localhost:5000/delete_project/${this.activeProject.id}`)
-        this.mapUpdated()
+        await this.loadProjects()
+        this.toggleRightDrawer()
         this.activeProject = null
         this.clickedMarker = null
       } catch (e) {
@@ -203,8 +206,34 @@ export default {
           projectName: projectName
         }
         await axios.post('http://localhost:5000/update_project', project)
+        this.projects.find(project => project.id === this.activeProject.id).name = projectName
+        this.activeProject = null
+        this.toggleRightDrawer()
         this.mapUpdated()
         this.clickedMarker = null
+      } catch (e) {
+        alert(e)
+      }
+    },
+    async deletePageEvent () {
+      try {
+        await axios.get(`http://localhost:5000/delete_page/${this.curPage.id}`)
+        await this.loadPages()
+        this.toggleRightDrawer()
+      } catch (e) {
+        alert(e)
+      }
+    },
+    async editPageEvent (pageName) {
+      try {
+        const id = this.curPage.id
+        const page = {
+          pageID: id,
+          pageName: pageName
+        }
+        await axios.post('http://localhost:5000/update_page', page)
+        this.pages.find(page => page.id === id).name = pageName
+        this.changeCurPage(id)
       } catch (e) {
         alert(e)
       }

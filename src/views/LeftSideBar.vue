@@ -33,7 +33,9 @@
       </template>
     </q-input>
     <q-separator inset class="q-mb-md"/>
+
     <q-btn label="Редактировать" class="q-mr-md" @click="editOpen"/>
+    <q-btn label="Удалить" @click="this.delete = true"/>
 
     <q-dialog v-model="this.edit" persistent>
       <q-card style="min-width: 350px">
@@ -61,7 +63,6 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-    <q-btn label="Удалить" @click="this.delete = true"/>
     <q-dialog v-model="this.delete" persistent>
       <q-card style="min-width: 350px">
         <q-card-section>

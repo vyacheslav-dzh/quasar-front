@@ -2,16 +2,16 @@
   <q-page class="flex flex-center page">
     <div id = "map"></div>
     <q-btn
-      class="add_marker"
       label="+"
-      rounded
-      :style="{
-      'display': show ? 'flex' : 'none',
-      'top': show ? `${this.blockPosition.y - 10}px` : 0,
-      'left': show ? `${this.blockPosition.x + 5}px` : 0,
-      'opacity': show ? 1 : 0,
-      }"
+      class="add_marker"
       @click="addMarker"
+      :style="{
+          'display': show ? 'flex' : 'none',
+          'top': show ? `${this.blockPosition.y - 10}px` : 0,
+          'left': show ? `${this.blockPosition.x + 5}px` : 0,
+          'opacity': show ? 1 : 0,
+        }"
+      rounded
     />
 
     <q-dialog v-model="this.prompt" persistent>
@@ -95,7 +95,7 @@ export default defineComponent({
   },
   setup () {
     return {
-      prompt: ref('false'),
+      prompt: ref(false),
       title: ref(''),
       description: ref(''),
       color: ref(''),
