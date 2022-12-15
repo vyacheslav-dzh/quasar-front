@@ -44,6 +44,8 @@
         v-if="this.pages.length > 0 && this.activeProject"
         @changePage="changeCurPage"
         @layersChange="this.mapUpdate = true"
+        @deleteProjectEvent="deleteProjectEvent"
+        @editProjectEvent="editProjectEvent"
         name="rightSideBar"
         :curPage="this.curPage"
         :pages="this.pages.filter(page => page.project_id === this.activeProject.id)"
@@ -178,6 +180,29 @@ export default {
     async deleteMarkerEvent (markerId) {
       try {
         await axios.get(`http://localhost:5000/delete_marker/${markerId}`)
+        this.mapUpdated()
+        this.clickedMarker = null
+      } catch (e) {
+        alert(e)
+      }
+    },
+    async deleteProjectEvent () {
+      try {
+        await axios.get(`http://localhost:5000/delete_project/${this.activeProject.id}`)
+        this.mapUpdated()
+        this.activeProject = null
+        this.clickedMarker = null
+      } catch (e) {
+        alert(e)
+      }
+    },
+    async editProjectEvent (projectName) {
+      try {
+        const project = {
+          projectID: this.activeProject.id,
+          projectName: projectName
+        }
+        await axios.post('http://localhost:5000/update_project', project)
         this.mapUpdated()
         this.clickedMarker = null
       } catch (e) {

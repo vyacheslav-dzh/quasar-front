@@ -12,6 +12,47 @@
     </div>
   </div>
 
+  <q-btn label="Редактировать" class="q-mr-md" @click="editOpen"/>
+
+  <q-dialog v-model="this.edit" persistent>
+    <q-card style="min-width: 350px">
+      <q-card-section>
+        <div class="text-h6">Название проекта</div>
+      </q-card-section>
+      <q-card-section class="q-pt-none">
+        <q-input dense v-model="this.newProjectName" autofocus @keyup.enter="this.edit = false" />
+      </q-card-section>
+
+      <q-card-actions align="right" class="text-primary">
+        <q-btn text-color="dark" flat label="Отмена" v-close-popup />
+        <q-btn
+          text-color="dark"
+          label="Сохранить"
+          @click="() => {
+            $emit('editProjectEvent', this.newProjectName)
+            this.newProjectName = ''
+          }"
+          v-close-popup />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
+  <q-btn label="Удалить" @click="this.delete = true"/>
+  <q-dialog v-model="this.delete" persistent>
+    <q-card style="min-width: 350px">
+      <q-card-section>
+        <div class="text-h6">Вы точно хотите удалить этот проект?</div>
+      </q-card-section>
+      <q-card-actions align="right" class="text-primary">
+        <q-btn text-color="dark" flat label="Отмена" v-close-popup />
+        <q-btn
+          text-color="dark"
+          label="Да"
+          @click="$emit('deleteProjectEvent')"
+          v-close-popup />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
+
   <q-separator class="q-mb-md"/>
 
   <q-list>
@@ -64,17 +105,20 @@ import { ref } from 'vue'
 
 export default {
   name: 'RightSideBar',
-  emits: ['changePage', 'layersChange'],
+  emits: ['changePage', 'layersChange', 'deleteProjectEvent', 'editProjectEvent'],
   setup () {
     return {
       layerName: ref(''),
-      prompt: ref(false)
+      prompt: ref(false),
+      delete: ref(null),
+      edit: ref(null)
     }
   },
   data () {
     return {
       activePage: '',
-      pageList: []
+      pageList: [],
+      newProjectName: ref('')
     }
   },
   props: {
@@ -104,6 +148,10 @@ export default {
         alert(e)
       }
       this.$q.loadingBar.stop()
+    },
+    editOpen () {
+      this.newProjectName = this.curPage.projectName
+      this.edit = true
     }
   }
 }
