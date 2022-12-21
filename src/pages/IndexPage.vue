@@ -16,45 +16,29 @@
 
     <q-dialog v-model="this.prompt" persistent>
       <q-card style="min-width: 350px">
-        <q-card-section>
-          <div class="text-h6">Слой</div>
-        </q-card-section>
-
         <q-card-section class="q-pt-none">
           <q-select
+            label="Слой"
             v-model="chosenLayer"
             :options="layerList.map(layer => ({label: layer.name, value: layer.id}))"
             emit-value
             map-options
           />
         </q-card-section>
-
-        <q-card-section>
-          <div class="text-h6">Заголовок</div>
-        </q-card-section>
-
         <q-card-section class="q-pt-none">
-          <q-input dense v-model="title" autofocus/>
+          <q-input dense v-model="title" autofocus label="Заголовок"/>
         </q-card-section>
-
-        <q-card-section>
-          <div class="text-h6">Описание</div>
-        </q-card-section>
-
         <q-card-section class="q-pt-none">
           <q-input
             v-model="description"
             filled
             autogrow
+            label="Описание"
           />
         </q-card-section>
-
-        <q-card-section>
-          <div class="text-h6">Цвет</div>
-        </q-card-section>
-
         <q-card-section class="q-pt-none">
           <q-input
+            label="Цвет"
             filled
             v-model="color"
             :rules="['anyColor']"
@@ -84,14 +68,13 @@ import { defineComponent, ref } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import axios from 'axios'
+import requests from 'src/requests'
 
 export default defineComponent({
   name: 'IndexPage',
   emits: ['mapUpdated', 'markerClicked'],
   props: {
-    curPage: Object,
-    project: Object,
-    mapUpdate: Boolean
+    status: Object
   },
   setup () {
     return {
@@ -108,7 +91,8 @@ export default defineComponent({
       map: null,
       tileLayer: null,
       layerList: [],
-      overlayCreated: false,
+      layerGroups: [],
+      control: null,
       blockPosition: null,
       timerCount: 1,
       show: false,
@@ -118,72 +102,115 @@ export default defineComponent({
   },
   async mounted () {
     await this.initMap()
-    await this.loadLayers()
-    await this.loadMarkers()
-    this.createOverlay()
-    this.setOnclick()
   },
-  async updated () {
-    await this.updateMap()
-    await this.loadLayers()
-    await this.loadMarkers()
-    this.createOverlay()
-    this.$emit('mapUpdated')
-    this.setOnclick()
+  beforeRouteUpdate (to) {
+    if (to.name !== 'markerPage') {
+      if (this.control) {
+        this.control.remove()
+        this.control = null
+        this.layerGroups = []
+      }
+      this.initMap()
+    }
   },
   methods: {
     async initMap () {
-      this.map = L.map('map').setView(this.centerCoordinates, 3)
-      this.tileLayer = await L.tileLayer(`http://127.0.0.1:5000/get_tile/${this.project.projectName}/${this.project.pageName}/{z}/{x}x{y}.png`,
-        {
-          attribution: '',
-          minZoom: 0,
-          maxZoom: this.project.maxZoom,
-          continuousWorld: true,
-          noWrap: true
-        })
-      this.tileLayer.addTo(this.map)
+      await this.createMap()
+      await this.loadLayers()
+      await this.loadMarkers()
+      this.createOverlay()
+      this.setOnclick()
     },
-    async updateMap () {
-      this.map.off()
-      this.map.remove()
+    async createMap () {
+      if (this.map) {
+        this.map.off()
+        this.map.remove()
+      }
       this.map = L.map('map').setView(this.centerCoordinates, 3)
-      this.tileLayer = await L.tileLayer(`http://127.0.0.1:5000/get_tile/${this.project.projectName}/${this.project.pageName}/{z}/{x}x{y}.png`,
-        {
-          attribution: '',
-          minZoom: 0,
-          maxZoom: this.project.maxZoom,
-          continuousWorld: true,
-          noWrap: true
-        })
+      const options = {
+        attribution: '',
+        minZoom: 0,
+        maxZoom: this.status.page.max_zoom,
+        continuousWorld: true,
+        noWrap: true
+      }
+      const projectId = this.status.project.id
+      const pageId = this.status.page.id
+      this.tileLayer = await requests.map.loadLayer(projectId, pageId, options)
       this.tileLayer.addTo(this.map)
     },
     createOverlay () {
-      if (this.layerList.length > 0 && !this.overlayCreated) {
-        const control = L.control.layers().addTo(this.map)
+      if (this.layerList.length > 0 && !this.control) {
+        this.control = L.control.layers().addTo(this.map)
         this.layerList.forEach(layer => {
-          if (this.curPage.id === layer.page_id) {
+          if (this.status.page.id === layer.page_id) {
             const layerGroup = []
             for (const marker of this.markerList.filter(item => item.layerId === layer.id)) {
               const popups = marker.list.map(item => this.createOnePopup(item))
               layerGroup.push(...popups)
             }
-            console.log(layerGroup)
-            control.addOverlay(new L.layerGroup(layerGroup), layer.name)
+            const lg = new L.layerGroup(layerGroup)
+            this.layerGroups.push({
+              layerId: layer.id,
+              layerGroup: lg
+            })
+            this.control.addOverlay(lg, layer.name)
           }
         })
-        this.overlayCreated = true
       }
     },
-    async loadLayers () {
-      this.overlayCreated = false
-      if (this.curPage.id) {
-        try {
-          const response = await axios.get(`http://localhost:5000/layers/${this.curPage.id}`)
-          this.layerList = response.data
-        } catch (e) {
-          alert(e)
+    async updateOverlay (layerId) {
+      await this.loadLayers()
+      await this.loadMarkers()
+      this.layerGroups.forEach(group => {
+        if (group.layerId === layerId) {
+          group.layerGroup.clearLayers()
         }
+      })
+      this.control.remove()
+      this.control = null
+      this.layerGroups = this.layerGroups.filter(group => group.layerId !== layerId)
+      this.createOverlay()
+    },
+    createOnePopup (popup) {
+      const markerHtmlStyles = `
+        background-color: ${popup.color};
+        width: 3rem;
+        height: 3rem;
+        display: block;
+        left: -1.5rem;
+        top: -1.5rem;
+        position: relative;
+        border-radius: 3rem 3rem 0;
+        transform: rotate(45deg);
+        border: 1px solid #FFFFFF`
+      const customPopup = `
+      <div>
+        <h5>${popup.header}</h5>
+        <p>${popup.text}</p>
+      </div>
+      `
+      const icon = L.divIcon({
+        className: "my-custom-pin",
+        iconAnchor: [0, 24],
+        labelAnchor: [-6, 0],
+        popupAnchor: [0, -36],
+        html: `<span style="${markerHtmlStyles}"/>`
+      })
+      const marker = L.marker([popup.x_axis, popup.y_axis], { icon: icon })
+      marker.bindPopup(customPopup).openPopup()
+      marker.markerID = popup.id
+      marker.on('click', () => this.markerClick(popup))
+
+      return marker
+    },
+    markerClick (popup) {
+      this.$router.push({ name: 'markerPage', params: { projectId: this.status.project.id, pageId: this.status.page.id, markerId: popup.id } })
+      this.$emit('markerClicked', popup)
+    },
+    async loadLayers () {
+      if (this.status.page.id) {
+        this.layerList = await requests.map.loadLayers(this.status.page.id)
       }
     },
     countDownTimer () {
@@ -212,71 +239,19 @@ export default defineComponent({
       this.timerCount = 1
     },
     async createMarker () {
-      try {
-        await axios.post('http://localhost:5000/add_marker', {
-          layerId: this.chosenLayer,
-          header: this.title,
-          text: this.description,
-          x: this.markerPosition.lat,
-          y: this.markerPosition.lng,
-          color: this.color
-        })
-        this.$forceUpdate()
-      } catch (e) {
-        alert(e)
+      const data = {
+        layerId: this.chosenLayer,
+        header: this.title,
+        text: this.description,
+        x: this.markerPosition.lat,
+        y: this.markerPosition.lng,
+        color: this.color
       }
-      // this.title = ''
-      // this.description = ''
-      // this.color = ''
-      // this.chosenLayer = null
+      await requests.map.createMarker(data)
+      await this.updateOverlay(this.chosenLayer)
     },
     async loadMarkers () {
-      try {
-        const markers = []
-        for (const layer of this.layerList) {
-          const response = await axios.get(`http://localhost:5000/markers/${layer.id}`)
-          markers.push({
-            layerId: layer.id,
-            list: response.data
-          })
-        }
-        this.markerList = markers
-      } catch (e) {
-        alert(e)
-      }
-    },
-    createOnePopup (popup) {
-      // this.map.clearLayers()
-      const markerHtmlStyles = `
-        background-color: ${popup.color};
-        width: 3rem;
-        height: 3rem;
-        display: block;
-        left: -1.5rem;
-        top: -1.5rem;
-        position: relative;
-        border-radius: 3rem 3rem 0;
-        transform: rotate(45deg);
-        border: 1px solid #FFFFFF`
-      const customPopup = `
-      <div>
-        <h5>${popup.header}</h5>
-        <p>${popup.text}</p>
-      </div>
-      `
-      const icon = L.divIcon({
-        className: "my-custom-pin",
-        iconAnchor: [0, 24],
-        labelAnchor: [-6, 0],
-        popupAnchor: [0, -36],
-        html: `<span style="${markerHtmlStyles}"/>`
-      })
-      const marker = L.marker([popup.x_axis, popup.y_axis], { icon: icon })
-      marker.bindPopup(customPopup).openPopup()
-      marker.markerID = popup.id
-      marker.on('click', () => this.$emit('markerClicked', popup))
-
-      return marker
+      this.markerList = await requests.map.loadMarkers(this.layerList)
     }
   }
 })

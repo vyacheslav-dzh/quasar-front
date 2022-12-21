@@ -22,7 +22,12 @@
           :name="project.id"
           :key="project.id"
           @click="changeProjectPage(project.id)"
-          :to="{name: 'projectPage', params: {projectName: project['name']}}"
+          :to="{
+            name: 'projectPage',
+            params: {
+              projectId: project.id,
+            }
+          }"
         />
         <q-route-tab to="/addProject" label="+" />
       </q-tabs>
@@ -41,24 +46,21 @@
 
     <q-drawer v-model="rightDrawerOpen" side="right" elevated>
       <router-view
-        v-if="this.pages.length > 0 && this.activeProject"
+        v-if="this.pages.length > 0 && this.status.project"
         @changePage="changeCurPage"
-        @layersChange="this.mapUpdate = true"
         @deleteProjectEvent="deleteProjectEvent"
         @editProjectEvent="editProjectEvent"
         @deletePageEvent="deletePageEvent"
         @editPageEvent="editPageEvent"
         name="rightSideBar"
-        :curPage="this.curPage"
-        :pages="this.pages.filter(page => page.project_id === this.activeProject.id)"
+        :status="this.status"
+        :pages="this.pages.filter(page => page.project_id === this.status.project.id)"
       />
     </q-drawer>
 
     <q-page-container>
       <router-view
-        :project="curPage"
-        :curPage="this.curPage"
-        @mapUpdate="this.mapUpdate"
+        :status="status"
         @markerClicked="this.markerClicked"
         name="map"
         v-if="chosenProject"
@@ -70,25 +72,32 @@
 
 <script>
 import { ref } from 'vue'
-import axios from 'axios'
+import requests from 'src/requests'
+import L from 'leaflet'
 
 export default {
   name: 'MainLayout',
   data () {
     return {
-      activeProject: null,
       projects: [],
       chosenProject: ref(null),
-      mapUpdate: ref(false),
       pages: [],
-      curPage: {
-        id: '',
-        projectName: '',
-        pageName: '',
-        path: '',
-        maxZoom: 0
+      clickedMarker: null,
+      status: {
+        project: {
+          id: null,
+          name: ''
+        },
+        page: {
+          id: null,
+          max_zoom: null,
+          name: '',
+          path: '',
+          project_id: null
+        },
+        marker: {}
       },
-      clickedMarker: null
+      map: null
     }
   },
   setup () {
@@ -114,50 +123,17 @@ export default {
     }
   },
   methods: {
-    changeCurPage (pageId) {
-      const page = this.pages.find(page => page.id === pageId)
-      this.curPage = {
-        id: page.id,
-        projectName: this.projects.find(project => project.id === page.project_id).name,
-        pageName: page.name,
-        path: page.path,
-        maxZoom: page.max_zoom
-      }
-    },
-    async loadProjects () {
-      try {
-        const response = await axios.get('http://localhost:5000/projects')
-        this.projects = response.data
-      } catch (e) {
-        alert(e)
-      }
-    },
-    async loadPages (projects) {
-      this.pages = []
-      const pageList = []
-      for (const project of projects) {
-        try {
-          const response = await axios.get(`http://localhost:5000/pages/${project.id}`)
-          pageList.push(response.data)
-        } catch (e) {
-          alert(e)
+    routePush () {
+      console.log('pushed')
+      this.$router.push({
+        name: 'projectPage',
+        params: {
+          projectId: this.status.project.id,
+          pageId: this.status.page.id
         }
-      }
-      pageList.forEach(pageListItem => pageListItem.forEach(page => this.pages.push(page)))
-    },
-    changeProjectPage (id) {
-      this.activeProject = this.projects.find(project => project.id === id)
-      const pageId = this.pages.find(page => page.project_id === this.activeProject.id).id
-      this.changeCurPage(pageId)
-      if (!this.rightDrawerOpen) {
-        this.toggleRightDrawer()
-      }
-    },
-    mapUpdated () {
-      this.mapUpdate = !this.mapUpdate
+      })
     },
     markerClicked (marker) {
-      console.log(marker)
       if (marker) {
         this.clickedMarker = marker
       }
@@ -165,78 +141,60 @@ export default {
         this.toggleLeftDrawer()
       }
     },
-    async editMarkerEvent (newMarker) {
-      try {
-        const marker = {
-          markerID: newMarker.oldMarker.id,
-          markerHeader: newMarker.newHeader,
-          markerText: newMarker.newDesc
-        }
-        await axios.post('http://localhost:5000/update_marker', marker)
-        this.mapUpdated()
-        this.clickedMarker = null
-      } catch (e) {
-        alert(e)
-      }
-    },
-    async deleteMarkerEvent (markerId) {
-      try {
-        await axios.get(`http://localhost:5000/delete_marker/${markerId}`)
-        this.mapUpdated()
-        this.clickedMarker = null
-      } catch (e) {
-        alert(e)
-      }
-    },
-    async deleteProjectEvent () {
-      try {
-        await axios.get(`http://localhost:5000/delete_project/${this.activeProject.id}`)
-        await this.loadProjects()
+    changeProjectPage (id) {
+      this.status.project = this.projects.find(project => project.id === id)
+      const pageId = this.pages.find(page => page.project_id === this.status.project.id).id
+      this.changeCurPage(pageId)
+      if (!this.rightDrawerOpen) {
         this.toggleRightDrawer()
-        this.activeProject = null
-        this.clickedMarker = null
-      } catch (e) {
-        alert(e)
       }
+    },
+    changeCurPage (pageId) {
+      this.status.page = this.pages.find(page => page.id === pageId)
+      this.routePush()
+    },
+    async loadProjects () {
+      this.projects = await requests.project.loadAll()
+    },
+    async loadPages (projects) {
+      this.pages = await requests.page.loadAll(projects)
     },
     async editProjectEvent (projectName) {
-      try {
-        const project = {
-          projectID: this.activeProject.id,
-          projectName: projectName
-        }
-        await axios.post('http://localhost:5000/update_project', project)
-        this.projects.find(project => project.id === this.activeProject.id).name = projectName
-        this.activeProject = null
-        this.toggleRightDrawer()
-        this.mapUpdated()
-        this.clickedMarker = null
-      } catch (e) {
-        alert(e)
-      }
+      await requests.project.edit(this.status.project.id, projectName)
+      this.status.project.name = projectName
+      this.routePush()
     },
-    async deletePageEvent () {
-      try {
-        await axios.get(`http://localhost:5000/delete_page/${this.curPage.id}`)
-        await this.loadPages()
-        this.toggleRightDrawer()
-      } catch (e) {
-        alert(e)
-      }
+    async deleteProjectEvent () {
+      await requests.project.delete(this.status.project.id)
+      const index = this.projects.findIndex(project => project.id === this.status.project.id)
+      this.projects = this.projects.filter(project => project.id !== this.status.project.id)
+      this.status.project = this.projects.length > index ? this.projects[index] : this.projects[this.projects.length - 1]
+      this.clickedMarker = null
+      this.routePush()
     },
     async editPageEvent (pageName) {
-      try {
-        const id = this.curPage.id
-        const page = {
-          pageID: id,
-          pageName: pageName
-        }
-        await axios.post('http://localhost:5000/update_page', page)
-        this.pages.find(page => page.id === id).name = pageName
-        this.changeCurPage(id)
-      } catch (e) {
-        alert(e)
-      }
+      const id = this.status.page.id
+      await requests.page.edit(id, pageName)
+      this.pages.find(page => page.id === id).name = pageName
+      this.changeCurPage(id)
+    },
+    async deletePageEvent () {
+      await requests.page.delete(this.status.page.id)
+      await this.loadPages()
+      this.toggleRightDrawer()
+    },
+    async editMarkerEvent (newMarker) {
+      await requests.marker.edit(newMarker)
+      console.log(newMarker)
+      this.clickedMarker.header = newMarker.newHeader
+      this.clickedMarker.text = newMarker.newDesc
+      this.routePush()
+    },
+    async deleteMarkerEvent (markerId) {
+      await requests.marker.delete(markerId)
+      this.clickedMarker = null
+      this.toggleLeftDrawer()
+      this.routePush()
     }
   }
 }

@@ -1,6 +1,6 @@
 <template>
   <div class="q-px-md q-py-lg">
-    <div class="text-h4 q-mb-md">{{ this.curPage.projectName }}</div>
+    <div class="text-h4 q-mb-md">{{ this.status.project.name }}</div>
     <q-separator inset class="q-mb-md"/>
     <div class="row">
       <div class="text-subtitle1 col">Дата начала</div>
@@ -63,57 +63,58 @@
             clickable
             class="item q-mb-md"
             v-ripple
-            :active="activePage === page.name"
+            :active="status.page.id === page.id"
             active-class="active-layer"
     >
       <q-item-section>
         <q-item-label
-          @click="activePage = page.name; $emit('changePage', page.id)"
-        >
-          <u>{{ page.name }}</u>
-        </q-item-label>
-        <q-item-label caption>
-            <div class="text-grey-8 q-gutter-xs">
-              <q-btn class="gt-xs" size="12px" flat dense round icon="delete" :disable="activePage !== page.name" @click="deletePage = true"/>
-              <q-btn class="gt-xs" size="12px" flat dense round icon="edit" :disable="activePage !== page.name" @click="editPageOpen"/>
-              <q-dialog v-model="this.editPage" persistent>
-                <q-card style="min-width: 350px">
-                  <q-card-section>
-                    <div class="text-h6">Название страницы</div>
-                  </q-card-section>
-                  <q-card-section class="q-pt-none">
-                    <q-input dense v-model="this.newPageName" autofocus @keyup.enter="this.editPage = false" />
-                  </q-card-section>
+          class="float-left"
+          @click="$emit('changePage', page.id)">
+            {{ page.name }}
 
-                  <q-card-actions align="right" class="text-primary">
-                    <q-btn text-color="dark" flat label="Отмена" v-close-popup />
-                    <q-btn
-                      text-color="dark"
-                      label="Сохранить"
-                      @click="() => {
+          <div class="text-grey-8 q-gutter-xs float-right">
+          </div>
+          <q-item-label class="text-grey-8 q-gutter-xs float-right">
+            <q-btn class="gt-xs" size="12px" flat dense round icon="delete" :disable="status.page.id !== page.id" @click="deletePage = true"/>
+            <q-btn class="gt-xs" size="12px" flat dense round icon="edit" :disable="status.page.id !== page.id" @click="editPageOpen"/>
+            <q-dialog v-model="this.editPage" persistent>
+              <q-card style="min-width: 350px">
+                <q-card-section>
+                  <div class="text-h6">Название страницы</div>
+                </q-card-section>
+                <q-card-section class="q-pt-none">
+                  <q-input dense v-model="this.newPageName" autofocus @keyup.enter="this.editPage = false" />
+                </q-card-section>
+
+                <q-card-actions align="right" class="text-primary">
+                  <q-btn text-color="dark" flat label="Отмена" v-close-popup />
+                  <q-btn
+                    text-color="dark"
+                    label="Сохранить"
+                    @click="() => {
                         $emit('editPageEvent', this.newPageName)
                         this.newProjectName = ''
                       }"
-                      v-close-popup />
-                  </q-card-actions>
-                </q-card>
-              </q-dialog>
-              <q-dialog v-model="this.deletePage" persistent>
-                <q-card style="min-width: 350px">
-                  <q-card-section>
-                    <div class="text-h6">Вы точно хотите удалить этот страницу?</div>
-                  </q-card-section>
-                  <q-card-actions align="right" class="text-primary">
-                    <q-btn text-color="dark" flat label="Отмена" v-close-popup />
-                    <q-btn
-                      text-color="dark"
-                      label="Да"
-                      @click="$emit('deletePageEvent')"
-                      v-close-popup />
-                  </q-card-actions>
-                </q-card>
-              </q-dialog>
-            </div>
+                    v-close-popup />
+                </q-card-actions>
+              </q-card>
+            </q-dialog>
+            <q-dialog v-model="this.deletePage" persistent>
+              <q-card style="min-width: 350px">
+                <q-card-section>
+                  <div class="text-h6">Вы точно хотите удалить этот страницу?</div>
+                </q-card-section>
+                <q-card-actions align="right" class="text-primary">
+                  <q-btn text-color="dark" flat label="Отмена" v-close-popup />
+                  <q-btn
+                    text-color="dark"
+                    label="Да"
+                    @click="$emit('deletePageEvent')"
+                    v-close-popup />
+                </q-card-actions>
+              </q-card>
+            </q-dialog>
+          </q-item-label>
         </q-item-label>
       </q-item-section>
     </q-item>
@@ -145,6 +146,7 @@
 <script>
 import axios from 'axios'
 import { ref } from 'vue'
+import requests from 'src/requests'
 
 export default {
   name: 'RightSideBar',
@@ -161,46 +163,31 @@ export default {
   },
   data () {
     return {
-      activePage: '',
-      pageList: [],
+      activePage: null,
       newProjectName: ref(''),
       newPageName: ref('')
     }
   },
   props: {
-    curPage: Object,
+    status: Object,
     pages: Array
-  },
-  mounted () {
-    this.pageList = this.pages
-    console.log(this.curPage)
-    this.activePage = this.pageList[0].name
-  },
-  updated () {
-    this.activePage = this.curPage.pageName
   },
   methods: {
     async createLayer () {
-      this.$q.loadingBar.start()
-      try {
-        await axios.post('http://localhost:5000/add_layer',
-          {
-            pageId: this.curPage.id,
-            layerName: this.layerName
-          })
-        this.layerName = ''
-        this.$emit('layersChange')
-      } catch (e) {
-        alert(e)
+      const data = {
+        pageId: this.status.page.id,
+        layerName: this.layerName
       }
-      this.$q.loadingBar.stop()
+      await requests.page.createLayer(data)
+      this.layerName = ''
+      this.$emit('layersChange')
     },
     editOpen () {
-      this.newProjectName = this.curPage.projectName
+      this.newProjectName = this.status.project.name
       this.editProject = true
     },
     editPageOpen () {
-      this.newPageName = this.activePage
+      this.newPageName = this.status.page.name
       this.editPage = true
     }
   }

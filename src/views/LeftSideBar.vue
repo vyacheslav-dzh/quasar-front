@@ -1,15 +1,15 @@
 <template>
   <div class="q-px-md q-py-lg">
-    <div class="text-h4 q-mb-md">{{ this.marker.header }}</div>
+    <div class="text-h4 q-mb-md">{{ currentMarker.header }}</div>
     <q-separator inset class="q-mb-md"/>
     <div class="row q-mb-md">
-      {{this.marker.text}}
+      {{ currentMarker.text }}
     </div>
     <q-separator inset class="q-mb-md"/>
     <div style="width: 100%; max-width: 400px">
       <div v-if="(this.comments.length > 0)">
         <q-chat-message
-          v-for="comment in this.comments"
+          v-for="comment in comments"
           :key="comment.id"
           :text="[comment.text]"
           :stamp="comment.date"
@@ -35,22 +35,30 @@
     <q-separator inset class="q-mb-md"/>
 
     <q-btn label="Редактировать" class="q-mr-md" @click="editOpen"/>
-    <q-btn label="Удалить" @click="this.delete = true"/>
+    <q-btn label="Удалить" @click="this.delete=true"/>
 
-    <q-dialog v-model="this.edit" persistent>
-      <q-card style="min-width: 350px">
-        <q-card-section>
-          <div class="text-h6">Название маркера</div>
+    <q-dialog
+      v-model="edit"
+      persistent
+    >
+      <q-card style="min-width: 350px; padding-top: 20px">
+        <q-card-section class="q-pt-none">
+          <q-input
+            dense
+            v-model="header"
+            autofocus
+            @keyup.enter="edit = false"
+            label="Название"
+          />
         </q-card-section>
         <q-card-section class="q-pt-none">
-          <q-input dense v-model="newMarkerHeader" autofocus @keyup.enter="this.edit = false" />
-        </q-card-section>
-
-        <q-card-section>
-          <div class="text-h6">Описание маркера</div>
-        </q-card-section>
-        <q-card-section class="q-pt-none">
-          <q-input dense v-model="newMarkerDesc" autofocus @keyup.enter="this.edit = false" />
+          <q-input
+            dense
+            v-model="desc"
+            autofocus
+            @keyup.enter="edit = false"
+            label="Описание"
+          />
         </q-card-section>
 
         <q-card-actions align="right" class="text-primary">
@@ -73,7 +81,7 @@
           <q-btn
             text-color="dark"
             label="Да"
-            @click="$emit('deleteMarkerEvent', this.marker.id)"
+            @click="$emit('deleteMarkerEvent', currentMarker.id)"
             v-close-popup />
         </q-card-actions>
       </q-card>
@@ -83,7 +91,7 @@
 
 <script>
 import { ref } from 'vue'
-import axios from 'axios'
+import requests from 'src/requests'
 
 export default {
   name: 'LeftSideBar',
@@ -93,7 +101,10 @@ export default {
   },
   data () {
     return {
-      comments: []
+      comments: [],
+      currentMarker: {},
+      header: '',
+      desc: ''
     }
   },
   setup () {
@@ -108,45 +119,43 @@ export default {
   async mounted () {
     await this.loadComments()
   },
-  async updated () {
-    await this.loadComments()
+  beforeRouteUpdate () {
+    this.loadComments()
+    this.currentMarker = {
+      id: this.marker.id,
+      header: this.marker.header,
+      text: this.marker.text
+    }
+    console.log(this.comments)
   },
   methods: {
     async loadComments () {
-      try {
-        const response = await axios.get(`http://localhost:5000/comments/${this.marker.id}`)
-        this.comments = response.data
-      } catch (e) {
-        alert(e)
-      }
+      this.comments = await requests.marker.loadComments(this.marker.id)
     },
     async sendComment () {
-      try {
-        const comment = {
-          markerId: this.marker.id,
-          userId: 0,
-          text: this.text,
-          name: 'me',
-          date: new Date().toLocaleString("ru")
-        }
-        await axios.post('http://localhost:5000/add_comment', comment)
-      } catch (e) {
-        alert(e)
+      const comment = {
+        markerId: this.marker.id,
+        userId: 0,
+        text: this.text,
+        name: 'me',
+        date: new Date().toLocaleString("ru")
       }
+      await requests.marker.sendComment(comment)
+      this.comments.push(comment)
       this.text = ''
     },
     editMarkerEvent () {
+      this.currentMarker.header = this.header
+      this.currentMarker.text = this.desc
       this.$emit('editMarkerEvent', {
         oldMarker: this.marker,
-        newHeader: this.newMarkerHeader,
-        newDesc: this.newMarkerDesc
+        newHeader: this.currentMarker.header,
+        newDesc: this.currentMarker.text
       })
-      this.newMarkerHeader = ''
-      this.newMarkerDesc = ''
     },
     editOpen () {
-      this.newMarkerHeader = this.marker.header
-      this.newMarkerDesc = this.marker.text
+      this.header = this.currentMarker.header
+      this.desc = this.currentMarker.text
       this.edit = true
     }
   }
